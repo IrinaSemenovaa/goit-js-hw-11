@@ -10,26 +10,31 @@ const searchInputEl = document.querySelector('input[type=text]');
 searchBtnEl.addEventListener('click', performSearch);
 window.addEventListener('scroll', handleScroll);
 
+const lightbox = new SimpleLightbox('.gallery a');
 let currentPage = 1;
 let currentQuery = '';
 
 async function performSearch(e) {
   e.preventDefault();
 
-  if (currentQuery !== searchInputEl.value) {
+  if (currentQuery !== searchInputEl.value.trim()) {
     currentPage = 1;
   }
-  currentQuery = searchInputEl.value;
+  currentQuery = searchInputEl.value.trim();
 
-  const photoCardsData = await searchPhotos(currentQuery, currentPage);
+  try {
+    const photoCardsData = await searchPhotos(currentQuery, currentPage);
 
-  if (!photoCardsData || photoCardsData.length === 0) {
+    if (!photoCardsData || photoCardsData.length === 0) {
+      showNoResultsError();
+      clearGallery();
+      return;
+    }
+
+    addPhotoCardsToGallery(photoCardsData);
+  } catch (error) {
     showNoResultsError();
-    clearGallery();
-    return;
   }
-
-  addPhotoCardsToGallery(photoCardsData);
 }
 
 async function searchPhotos(query) {
@@ -41,14 +46,13 @@ async function searchPhotos(query) {
     const response = await axios.get(URL);
     const photoCardsData = response.data.hits;
     const totalHits = response.data.totalHits;
+
     if (!photoCardsData || photoCardsData.length === 0) {
       throw new Error('No results found');
     }
     return { hits: photoCardsData, totalHits };
   } catch (error) {
-    console.error(error);
-    showNoResultsError();
-    return;
+    throw new Error(error);
   }
 }
 
@@ -77,11 +81,19 @@ function addPhotoCardsToGallery(photoCardsData) {
     galleryEl.insertAdjacentHTML('beforeend', photoCardsMarkup);
   }
 
-  initLightbox();
+  lightbox.refresh();
 }
 
-function initLightbox() {
-  const lightbox = new SimpleLightbox('.gallery a');
+async function handleScroll() {
+  try {
+    if (window.innerHeight + window.scrollY >= document.body.offsetHeight) {
+      currentPage += 1;
+      const photoCardsData = await searchPhotos(currentQuery, currentPage);
+      addPhotoCardsToGallery(photoCardsData);
+    }
+  } catch (error) {
+    showNoResultsError();
+  }
 }
 
 function clearGallery() {
@@ -92,12 +104,4 @@ function showNoResultsError() {
   Notiflix.Notify.failure(
     'Sorry, there are no images matching your search query. Please try again.'
   );
-}
-
-async function handleScroll() {
-  if (window.innerHeight + window.scrollY >= document.body.offsetHeight) {
-    currentPage += 1;
-    const photoCardsData = await searchPhotos(currentQuery, currentPage);
-    addPhotoCardsToGallery(photoCardsData);
-  }
 }
